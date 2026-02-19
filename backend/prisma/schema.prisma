@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum BattleStatus {
+  ACTIVE
+  FINISHED
+}
+
+enum BattleMode {
+  PVP
+  PVE
+}
+
+enum BattleSide {
+  INITIATOR
+  OPPONENT
+}
+
+model User {
+  id           Int    @id @default(autoincrement())
+  email        String @unique
+  passwordHash String
+  role         Role   @default(USER)
+
+  level  Int @default(1)
+  xp     Int @default(0)
+  wins   Int @default(0)
+  losses Int @default(0)
+
+  battlesInitiated   Battle[]            @relation("BattleInitiator")
+  battlesOpposed     Battle[]            @relation("BattleOpponent")
+  battleParticipants BattleParticipant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Character {
+  id            Int     @id @default(autoincrement())
+  name          String  @unique
+  maxHp         Int
+  hp            Int
+  attack        Int
+  requiredLevel Int     @default(1)
+
+  battleParticipants BattleParticipant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Battle {
+  id Int @id @default(autoincrement())
+
+  mode   BattleMode
+  status BattleStatus @default(ACTIVE)
+
+  initiatorUserId Int
+  opponentUserId  Int?
+
+  currentTurnSide BattleSide @default(INITIATOR)
+
+  winnerUserId Int?
+  winnerSide   BattleSide?
+
+  participants BattleParticipant[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  initiatorUser User  @relation("BattleInitiator", fields: [initiatorUserId], references: [id], onDelete: Cascade)
+  opponentUser  User? @relation("BattleOpponent", fields: [opponentUserId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([initiatorUserId])
+  @@index([opponentUserId])
+}
+
+model BattleParticipant {
+  id Int @id @default(autoincrement())
+
+  battleId Int
+  side     BattleSide
+
+  userId      Int?
+  characterId Int
+
+  hp     Int
+  maxHp  Int
+  attack Int
+
+  specialUsed Boolean @default(false)
+
+  battle    Battle    @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Restrict)
+
+  @@unique([battleId, side])
+  @@index([battleId])
+  @@index([userId])
+  @@index([characterId])
+}
