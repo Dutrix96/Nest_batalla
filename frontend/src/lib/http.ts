@@ -1,48 +1,39 @@
 import { env } from "./env";
 
-export class HttpError extends Error {
-  status: number;
-  data: any;
-  constructor(message: string, status: number, data: any) {
-    super(message);
-    this.status = status;
-    this.data = data;
-  }
-}
+type HttpOptions = {
+  method?: "GET" | "POST" | "PUT" | "DELETE";
+  token?: string;
+  body?: any;
+};
 
-function buildHeaders(token?: string) {
+export async function http<T>(path: string, opts?: HttpOptions): Promise<T> {
+  const method = opts?.method ?? "GET";
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
-}
 
-export async function http<T>(
-  path: string,
-  opts?: { method?: string; body?: any; token?: string }
-): Promise<T> {
+  if (opts?.token) {
+    headers["Authorization"] = `Bearer ${opts.token}`;
+  }
+
   const res = await fetch(`${env.apiBaseUrl}${path}`, {
-    method: opts?.method || "GET",
-    headers: buildHeaders(opts?.token),
+    method,
+    headers,
     body: opts?.body ? JSON.stringify(opts.body) : undefined,
   });
 
-  const text = await res.text();
-  const data = text ? safeJson(text) : null;
-
   if (!res.ok) {
-    const msg = data?.message || data?.error || `HTTP ${res.status}`;
-    throw new HttpError(msg, res.status, data);
+    let msg = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      msg = data?.message ?? msg;
+    } catch {}
+    throw new Error(msg);
   }
 
-  return data as T;
-}
+  // algunos endpoints pueden devolver 204
+  if (res.status === 204) return undefined as unknown as T;
 
-function safeJson(text: string) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { raw: text };
-  }
+  return (await res.json()) as T;
 }

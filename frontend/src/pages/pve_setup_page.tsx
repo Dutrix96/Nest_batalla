@@ -38,10 +38,10 @@ export function PveSetupPage() {
         const list = await apiCharacters(token);
         setChars(list);
 
-        // defaults
         const lvl = user?.level ?? 1;
         const firstMine = list.find((c) => c.requiredLevel <= lvl) ?? null;
         const firstAi = list[0] ?? null;
+
         setMyCharId(firstMine ? firstMine.id : null);
         setAiCharId(firstAi ? firstAi.id : null);
       } catch (e: any) {
@@ -50,9 +50,9 @@ export function PveSetupPage() {
         setLoading(false);
       }
     })();
-  }, [token]);
+  }, [token, user?.level]);
 
-  async function crear() {
+  async function crearPve() {
     if (!token) return;
     if (!myCharId || !aiCharId) return;
 
@@ -104,18 +104,14 @@ export function PveSetupPage() {
               onChange={(e) => setMyCharId(Number(e.target.value))}
               disabled={loading || myOptions.length === 0}
             >
-              {myOptions.length === 0 ? (
-                <option value="">No tienes personajes para tu nivel</option>
-              ) : null}
+              {myOptions.length === 0 ? <option value="">No tienes personajes para tu nivel</option> : null}
               {myOptions.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} (lvl {c.requiredLevel}) · ATK {c.attack} · HP {c.maxHp}
                 </option>
               ))}
             </select>
-            <div className="mt-2 text-xs text-zinc-500">
-              Solo salen personajes con requiredLevel mor o igual a tu level.
-            </div>
+            <div className="mt-2 text-xs text-zinc-500">Solo salen personajes con requiredLevel menor o igual a tu level.</div>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
@@ -132,15 +128,13 @@ export function PveSetupPage() {
                 </option>
               ))}
             </select>
-            <div className="mt-2 text-xs text-zinc-500">
-              En PVE, el opponentUserId es null en backend (IA).
-            </div>
+            <div className="mt-2 text-xs text-zinc-500">En PVE, el opponentUserId es null en backend (IA).</div>
           </div>
         </div>
 
         <button
           className="mt-6 w-full rounded-2xl bg-indigo-500 hover:bg-indigo-400 text-white px-4 py-3 font-semibold disabled:opacity-50"
-          onClick={crear}
+          onClick={crearPve}
           disabled={loading || !myCharId || !aiCharId}
         >
           Empezar batalla

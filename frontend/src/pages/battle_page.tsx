@@ -30,7 +30,6 @@ export function BattlePage() {
     if (!user || !state) return null;
     if (state.initiator?.userId === user.id) return "INITIATOR";
     if (state.opponent?.userId === user.id) return "OPPONENT";
-    // PVE: opponent.userId suele ser null, asi que eres initiator si coincide
     return null;
   }, [user, state]);
 
@@ -81,7 +80,6 @@ export function BattlePage() {
     });
 
     sock.on("battle:finished", (p) => {
-      // opcional: puedes mostrar toast, aqui con banner simple
       setErr(`Batalla terminada. WinnerSide: ${p.winnerSide ?? "?"}`);
     });
 
@@ -89,7 +87,6 @@ export function BattlePage() {
       setErr(p.message || "Error socket");
     });
 
-    // join
     sock.emit("battle:join", { battleId });
 
     return () => {
@@ -108,20 +105,9 @@ export function BattlePage() {
 
     setErr(null);
 
-    // intento realtime
-    const sock = socketRef.current;
-    if (sock && sock.connected) {
-      sock.emit("battle:attack", { battleId, special: !!special });
-      return;
-    }
-
-    // fallback REST
     try {
       await apiAttack(token, battleId, !!special);
-      // luego refresco estado
-      const res = await apiBattle(token, battleId);
-      const s = (res?.battle ?? res) as BattleState;
-      setState(s);
+      // no refresco por GET: el backend debe emitir battle:state por ws tras el endpoint
     } catch (e: any) {
       setErr(e?.message || "No se pudo atacar");
     }
@@ -192,11 +178,7 @@ export function BattlePage() {
                   </div>
                 </div>
                 <div className="text-xs text-zinc-500">
-                  {state?.status === "ACTIVE"
-                    ? myTurn
-                      ? "Tu turno"
-                      : "Esperando"
-                    : "Finalizada"}
+                  {state?.status === "ACTIVE" ? (myTurn ? "Tu turno" : "Esperando") : "Finalizada"}
                 </div>
               </div>
 

@@ -6,6 +6,7 @@ import { PvpSetupPage } from "./pages/pvp_setup_page";
 import { BattlePage } from "./pages/battle_page";
 import { NotFound } from "./pages/not_found";
 import { ProtectedRoute } from "./auth/protected_route";
+import { LobbyPage } from "./pages/lobby_page";
 
 export function App() {
   return (
@@ -45,6 +46,15 @@ export function App() {
           element={
             <ProtectedRoute>
               <BattlePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/app/lobby/:id"
+          element={
+            <ProtectedRoute>
+              <LobbyPage />
             </ProtectedRoute>
           }
         />

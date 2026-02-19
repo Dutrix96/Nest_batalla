@@ -1,10 +1,11 @@
-import { IsBoolean, IsInt, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, Min } from "class-validator";
 
-export class AttackBattleDto {
+export class AttackDto {
   @IsInt()
   @Min(1)
   battleId: number;
 
+  @IsOptional()
   @IsBoolean()
-  special: boolean;
+  special?: boolean;
 }

@@ -1,145 +1,132 @@
-import { UseGuards } from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
-} from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { BattlesService } from './battles.service';
-import { WsJwtGuard } from '../auth/ws-jwt.guard';
+} from "@nestjs/websockets";
+import { Server, Socket } from "socket.io";
+import { BattlesService } from "./battles.service";
+import { JwtService } from "@nestjs/jwt";
 
-@WebSocketGateway({ cors: { origin: '*', methods: ['GET', 'POST'] } })
-@UseGuards(WsJwtGuard)
+@WebSocketGateway({
+  cors: { origin: true, credentials: true },
+})
 export class BattlesGateway {
   @WebSocketServer()
-  io: Server;
+  server: Server;
 
-  constructor(private readonly battlesService: BattlesService) {}
+  private socketsByUser = new Map<number, Set<string>>();
 
-  @SubscribeMessage('battle:join')
-  async join(@MessageBody() body: { battleId: number }, @ConnectedSocket() client: Socket) {
-    return this.safe(client, async () => {
-      const battleId = Number(body?.battleId);
-      if (!battleId) throw new Error('battleId invalido');
+  constructor(
+    private battlesService: BattlesService,
+    private jwt: JwtService
+  ) {}
 
-      const userId = Number((client as any).data?.user?.id);
-      const battle = await this.battlesService.findOne(userId, battleId);
+  handleConnection(client: Socket) {
+    try {
+      const authToken = (client.handshake.auth?.token as string | undefined) ?? "";
+      const headerAuth = (client.handshake.headers?.authorization as string | undefined) ?? "";
 
-      client.join(this.room(battleId));
-      client.emit('battle:state', this.toState(battle));
+      const token =
+        authToken ||
+        (headerAuth.startsWith("Bearer ") ? headerAuth.slice("Bearer ".length) : "");
 
-      return { ok: true };
-    });
-  }
-
-  @SubscribeMessage('battle:leave')
-  async leave(@MessageBody() body: { battleId: number }, @ConnectedSocket() client: Socket) {
-    return this.safe(client, async () => {
-      const battleId = Number(body?.battleId);
-      if (!battleId) throw new Error('battleId invalido');
-
-      client.leave(this.room(battleId));
-      return { ok: true };
-    });
-  }
-
-  @SubscribeMessage('battle:state')
-  async state(@MessageBody() body: { battleId: number }, @ConnectedSocket() client: Socket) {
-    return this.safe(client, async () => {
-      const battleId = Number(body?.battleId);
-      if (!battleId) throw new Error('battleId invalido');
-
-      const userId = Number((client as any).data?.user?.id);
-      const battle = await this.battlesService.findOne(userId, battleId);
-
-      client.emit('battle:state', this.toState(battle));
-      return { ok: true };
-    });
-  }
-
-  @SubscribeMessage('battle:attack')
-  async attack(@MessageBody() body: { battleId: number; special?: boolean }, @ConnectedSocket() client: Socket) {
-    return this.safe(client, async () => {
-      const battleId = Number(body?.battleId);
-      if (!battleId) throw new Error('battleId invalido');
-
-      const userId = Number((client as any).data?.user?.id);
-      const special = Boolean(body?.special);
-
-      const result = await this.battlesService.attack(userId, battleId, special);
-
-      const room = this.room(battleId);
-
-      this.io.to(room).emit('battle:attack', result.attackEvent);
-      if (result.machineAttackEvent) this.io.to(room).emit('battle:attack', result.machineAttackEvent);
-
-      this.io.to(room).emit('battle:state', this.toState(result.battle));
-
-      if (result.battle.status === 'FINISHED') {
-        this.io.to(room).emit('battle:finished', {
-          battleId: result.battle.id,
-          winnerUserId: result.battle.winnerUserId,
-          winnerSide: result.battle.winnerSide,
-        });
+      if (!token) {
+        client.disconnect();
+        return;
       }
 
-      return { ok: true };
-    });
+      const payload: any = this.jwt.verify(token);
+      const userId = Number(payload?.sub ?? payload?.id ?? payload?.userId);
+
+      if (!Number.isFinite(userId) || userId <= 0) {
+        client.disconnect();
+        return;
+      }
+
+      (client as any).data.userId = userId;
+
+      const set = this.socketsByUser.get(userId) ?? new Set<string>();
+      set.add(client.id);
+      this.socketsByUser.set(userId, set);
+    } catch {
+      client.disconnect();
+    }
+  }
+
+  handleDisconnect(client: Socket) {
+    const userId = this.getUserId(client);
+    if (!userId) return;
+
+    const set = this.socketsByUser.get(userId);
+    if (!set) return;
+
+    set.delete(client.id);
+    if (set.size === 0) this.socketsByUser.delete(userId);
   }
 
   private room(battleId: number) {
     return `battle:${battleId}`;
   }
 
-  private toState(battle: any) {
-    const initiator = battle.participants.find((p: any) => p.side === 'INITIATOR');
-    const opponent = battle.participants.find((p: any) => p.side === 'OPPONENT');
+  private getUserId(client: Socket): number | null {
+    const id = (client as any).data?.userId ?? null;
+    return typeof id === "number" ? id : null;
+  }
+
+  emitToUser(userId: number, event: string, payload: any) {
+    const set = this.socketsByUser.get(userId);
+    if (!set) return;
+
+    for (const socketId of set.values()) {
+      this.server.to(socketId).emit(event, payload);
+    }
+  }
+
+  emitToBattle(battleId: number, event: string, payload: any) {
+    this.server.to(this.room(battleId)).emit(event, payload);
+  }
+
+  @SubscribeMessage("battle:join")
+  async onJoin(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: { battleId: number }
+  ) {
+    const battleId = Number(body?.battleId);
+    if (!battleId) return;
+
+    client.join(this.room(battleId));
+
+    const userId = this.getUserId(client);
+    if (!userId) {
+      client.emit("battle:error", { message: "No auth" });
+      return;
+    }
+
+    const state: any = await this.battlesService.getBattleState(userId, battleId);
+
+    if (state.status === "LOBBY") {
+      this.emitToBattle(battleId, "battle:lobby_state", this.mapLobby(state));
+    } else {
+      this.emitToBattle(battleId, "battle:state", state);
+    }
+  }
+
+  private mapLobby(battle: any) {
+    const ini = battle.participants?.find((p: any) => p.side === "INITIATOR") ?? null;
+    const opp = battle.participants?.find((p: any) => p.side === "OPPONENT") ?? null;
 
     return {
       id: battle.id,
       mode: battle.mode,
       status: battle.status,
-      currentTurnSide: battle.currentTurnSide,
-      winnerUserId: battle.winnerUserId,
-      winnerSide: battle.winnerSide,
-      initiator: initiator
-        ? {
-            userId: initiator.userId,
-            character: {
-              id: initiator.characterId,
-              name: initiator.character?.name,
-              hp: initiator.hp,
-              maxHp: initiator.maxHp,
-              attack: initiator.attack,
-            },
-            specialUsed: initiator.specialUsed,
-          }
-        : null,
-      opponent: opponent
-        ? {
-            userId: opponent.userId,
-            character: {
-              id: opponent.characterId,
-              name: opponent.character?.name,
-              hp: opponent.hp,
-              maxHp: opponent.maxHp,
-              attack: opponent.attack,
-            },
-            specialUsed: opponent.specialUsed,
-          }
-        : null,
+      initiatorUserId: battle.initiatorUserId,
+      opponentUserId: battle.opponentUserId,
+      initiatorPicked: !!ini,
+      opponentPicked: !!opp,
+      initiatorCharacter: ini?.character ? { id: ini.character.id, name: ini.character.name } : null,
+      opponentCharacter: opp?.character ? { id: opp.character.id, name: opp.character.name } : null,
     };
-  }
-
-  private async safe(client: Socket, fn: () => Promise<any>) {
-    try {
-      return await fn();
-    } catch (e: any) {
-      const message = e?.message || 'Error inesperado';
-      client.emit('battle:error', { message });
-      return { ok: false, message };
-    }
   }
 }

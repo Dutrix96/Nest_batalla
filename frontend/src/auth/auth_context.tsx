@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from "react";
 import type { User } from "../api/types";
+import { getToken, getUserRaw, setToken, setUserRaw, clearAllAuth } from "../lib/storage";
 
 type AuthState = {
   token: string | null;
@@ -10,14 +11,10 @@ type AuthState = {
 
 const AuthCtx = createContext<AuthState | null>(null);
 
-const LS_TOKEN = "bf_token";
-const LS_USER = "bf_user";
-const storage = window.sessionStorage;
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => storage.getItem(LS_TOKEN));
-  const [user, setUser] = useState<User | null>(() => {
-    const raw = storage.getItem(LS_USER);
+  const [token, setTokenState] = useState<string | null>(() => getToken());
+  const [user, setUserState] = useState<User | null>(() => {
+    const raw = getUserRaw();
     return raw ? (JSON.parse(raw) as User) : null;
   });
 
@@ -26,16 +23,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       user,
       setSession: (t, u) => {
+        setTokenState(t);
+        setUserState(u);
         setToken(t);
-        setUser(u);
-        storage.setItem(LS_TOKEN, t);
-        storage.setItem(LS_USER, JSON.stringify(u));
+        setUserRaw(JSON.stringify(u));
       },
       clear: () => {
-        setToken(null);
-        setUser(null);
-        storage.removeItem(LS_TOKEN);
-        storage.removeItem(LS_USER);
+        setTokenState(null);
+        setUserState(null);
+        clearAllAuth();
       },
     }),
     [token, user]

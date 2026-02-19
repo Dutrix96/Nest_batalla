@@ -12,6 +12,7 @@ enum Role {
 }
 
 enum BattleStatus {
+  LOBBY
   ACTIVE
   FINISHED
 }
@@ -63,7 +64,7 @@ model Battle {
   id Int @id @default(autoincrement())
 
   mode   BattleMode
-  status BattleStatus @default(ACTIVE)
+  status BattleStatus @default(LOBBY)
 
   initiatorUserId Int
   opponentUserId  Int?
