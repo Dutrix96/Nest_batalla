@@ -10,7 +10,7 @@ import { CreateBattleDto, CreateBattleModeDto } from "./dto/create-battle.dto";
 
 @Injectable()
 export class BattlesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async createPvpLobby(initiatorUserId: number, opponentUserId: number) {
     if (initiatorUserId === opponentUserId) {
@@ -389,66 +389,66 @@ export class BattlesService {
   }
 
   private async finishBattle(battleId: number, winnerSide: any, winnerUserId: number | null) {
-  await this.prisma.battle.update({
-    where: { id: battleId },
-    data: {
-      status: "FINISHED",
-      winnerSide,
-      winnerUserId,
-    },
-  });
-
-  const parts = await this.prisma.battleParticipant.findMany({
-    where: { battleId },
-    select: { side: true, userId: true },
-  });
-
-  const winner = parts.find((p) => p.side === winnerSide) ?? null;
-  const loser = parts.find((p) => p.side !== winnerSide) ?? null;
-
-  const winnerId = winner?.userId ?? null;
-  const loserId = loser?.userId ?? null;
-
-  await this.otorgarXpSiUsuarioExiste(winnerId, 20);
-  await this.otorgarXpSiUsuarioExiste(loserId, 10);
-
-  await this.sumarWinLose(winnerId, loserId);
-}
-
-  async getBattleState(userId: number, battleId: number) {
-  const battle = await this.prisma.battle.findUnique({
-    where: { id: battleId },
-    include: {
-      participants: {
-        include: {
-          character: true,
-        },
+    await this.prisma.battle.update({
+      where: { id: battleId },
+      data: {
+        status: "FINISHED",
+        winnerSide,
+        winnerUserId,
       },
-    },
-  });
+    });
 
-  if (!battle) throw new NotFoundException("Battle no existe");
+    const parts = await this.prisma.battleParticipant.findMany({
+      where: { battleId },
+      select: { side: true, userId: true },
+    });
 
-  const isInitiator = battle.initiatorUserId === userId;
-  const isOpponent = battle.opponentUserId === userId;
+    const winner = parts.find((p) => p.side === winnerSide) ?? null;
+    const loser = parts.find((p) => p.side !== winnerSide) ?? null;
 
-  if (!isInitiator && !isOpponent) {
-    throw new ForbiddenException("No eres participante");
+    const winnerId = winner?.userId ?? null;
+    const loserId = loser?.userId ?? null;
+
+    await this.otorgarXpSiUsuarioExiste(winnerId, 20);
+    await this.otorgarXpSiUsuarioExiste(loserId, 10);
+
+    await this.sumarWinLose(winnerId, loserId);
   }
 
-  const ini = battle.participants.find((p) => p.side === "INITIATOR") ?? null;
-  const opp = battle.participants.find((p) => p.side === "OPPONENT") ?? null;
+  async getBattleState(userId: number, battleId: number) {
+    const battle = await this.prisma.battle.findUnique({
+      where: { id: battleId },
+      include: {
+        participants: {
+          include: {
+            character: true,
+          },
+        },
+      },
+    });
 
-  return {
-    id: battle.id,
-    mode: battle.mode,
-    status: battle.status,
-    currentTurnSide: battle.currentTurnSide,
-    winnerSide: battle.winnerSide,
-    winnerUserId: battle.winnerUserId,
+    if (!battle) throw new NotFoundException("Battle no existe");
 
-    initiator: ini
-      ? {
+    const isInitiator = battle.initiatorUserId === userId;
+    const isOpponent = battle.opponentUserId === userId;
+
+    if (!isInitiator && !isOpponent) {
+      throw new ForbiddenException("No eres participante");
+    }
+
+    const ini = battle.participants.find((p) => p.side === "INITIATOR") ?? null;
+    const opp = battle.participants.find((p) => p.side === "OPPONENT") ?? null;
+
+    return {
+      id: battle.id,
+      mode: battle.mode,
+      status: battle.status,
+      currentTurnSide: battle.currentTurnSide,
+      winnerSide: battle.winnerSide,
+      winnerUserId: battle.winnerUserId,
+
+      initiator: ini
+        ? {
           userId: ini.userId,
           specialUsed: ini.specialUsed,
           character: {
@@ -458,10 +458,10 @@ export class BattlesService {
             maxHp: ini.maxHp,
           },
         }
-      : null,
+        : null,
 
-    opponent: opp
-      ? {
+      opponent: opp
+        ? {
           userId: opp.userId,
           specialUsed: opp.specialUsed,
           character: {
@@ -471,51 +471,53 @@ export class BattlesService {
             maxHp: opp.maxHp,
           },
         }
-      : null,
-  };
-}
+        : null,
+    };
+  }
   private aplicarXpYNivel(nivelActual: number, xpActual: number, xpGanada: number) {
-  let nivel = nivelActual;
-  let xp = xpActual + xpGanada;
+    let nivel = nivelActual ?? 1;
+    let xp = (xpActual ?? 0) + xpGanada;
 
-  while (xp >= nivel * 100) {
-    xp -= nivel * 100;
-    nivel += 1;
+    const UMBRAL = 100;
+
+    while (xp >= UMBRAL) {
+      xp -= UMBRAL;
+      nivel += 1;
+    }
+
+    return { nivel, xp };
   }
 
-  return { nivel, xp };
-}
+  private async otorgarXpSiUsuarioExiste(userId: number | null, xpGanada: number) {
+    if (!userId) return;
 
-private async otorgarXpSiUsuarioExiste(userId: number | null, xpGanada: number) {
-  if (!userId) return;
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, level: true, xp: true },
+    });
+    if (!u) return;
 
-  const u = await this.prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, level: true, xp: true },
-  });
-  if (!u) return;
+    const res = this.aplicarXpYNivel(u.level ?? 1, u.xp ?? 0, xpGanada);
 
-  const res = this.aplicarXpYNivel(u.level ?? 1, u.xp ?? 0, xpGanada);
-
-  await this.prisma.user.update({
-    where: { id: userId },
-    data: { level: res.nivel, xp: res.xp },
-  });
-}
-
-private async sumarWinLose(winnerUserId: number | null, loserUserId: number | null) {
-  if (winnerUserId) {
     await this.prisma.user.update({
-      where: { id: winnerUserId },
-      data: { wins: { increment: 1 } },
+      where: { id: userId },
+      data: { level: res.nivel, xp: res.xp },
     });
   }
 
-  if (loserUserId) {
-    await this.prisma.user.update({
-      where: { id: loserUserId },
-      data: { losses: { increment: 1 } },
-    });
+  private async sumarWinLose(winnerUserId: number | null, loserUserId: number | null) {
+    if (winnerUserId) {
+      await this.prisma.user.update({
+        where: { id: winnerUserId },
+        data: { wins: { increment: 1 } },
+      });
+    }
+
+    if (loserUserId) {
+      await this.prisma.user.update({
+        where: { id: loserUserId },
+        data: { losses: { increment: 1 } },
+      });
+    }
   }
-}
 }
