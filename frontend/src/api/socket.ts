@@ -1,5 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import { env } from "../lib/env";
+import { getToken } from "../lib/storage";
 
 type ServerToClientEvents = {
   "battle:state": (state: any) => void;
@@ -21,9 +22,10 @@ type ClientToServerEvents = {
 
 export type BattleSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-export function createBattleSocket(token: string): BattleSocket {
+export function createBattleSocket(token?: string): BattleSocket {
+  const t = token ?? getToken() ?? "";
   return io(env.apiBaseUrl, {
     transports: ["websocket"],
-    auth: { token },
+    auth: { token: t },
   });
 }

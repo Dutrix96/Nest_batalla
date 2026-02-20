@@ -7,6 +7,8 @@ import { BattlePage } from "./pages/battle_page";
 import { NotFound } from "./pages/not_found";
 import { ProtectedRoute } from "./auth/protected_route";
 import { LobbyPage } from "./pages/lobby_page";
+import { AdminPage } from "./pages/admin_page";
+import { AdminRoute } from "./auth/admin_routes";
 
 export function App() {
   return (
@@ -55,6 +57,17 @@ export function App() {
           element={
             <ProtectedRoute>
               <LobbyPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/app/admin"
+          element={
+            <ProtectedRoute>
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
             </ProtectedRoute>
           }
         />

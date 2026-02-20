@@ -56,7 +56,7 @@ export class BattlesGateway {
   }
 
   handleDisconnect(client: Socket) {
-    const userId = this.getUserId(client);
+    const userId = (client as any).data?.userId as number | undefined;
     if (!userId) return;
 
     const set = this.socketsByUser.get(userId);
@@ -75,6 +75,22 @@ export class BattlesGateway {
     return typeof id === "number" ? id : null;
   }
 
+  emitBattleState(battleId: number, state: any) {
+    this.server.to(this.room(battleId)).emit("battle:state", state);
+  }
+
+  emitBattleAttack(battleId: number, ev: any) {
+    this.server.to(this.room(battleId)).emit("battle:attack", ev);
+  }
+
+  emitBattleFinished(battleId: number, payload: any) {
+    this.server.to(this.room(battleId)).emit("battle:finished", payload);
+  }
+
+  emitLobbyState(battleId: number, lobby: any) {
+    this.server.to(this.room(battleId)).emit("battle:lobby_state", lobby);
+  }
+
   emitToUser(userId: number, event: string, payload: any) {
     const set = this.socketsByUser.get(userId);
     if (!set) return;
@@ -82,10 +98,6 @@ export class BattlesGateway {
     for (const socketId of set.values()) {
       this.server.to(socketId).emit(event, payload);
     }
-  }
-
-  emitToBattle(battleId: number, event: string, payload: any) {
-    this.server.to(this.room(battleId)).emit(event, payload);
   }
 
   @SubscribeMessage("battle:join")
@@ -107,9 +119,9 @@ export class BattlesGateway {
     const state: any = await this.battlesService.getBattleState(userId, battleId);
 
     if (state.status === "LOBBY") {
-      this.emitToBattle(battleId, "battle:lobby_state", this.mapLobby(state));
+      this.emitLobbyState(battleId, this.mapLobby(state));
     } else {
-      this.emitToBattle(battleId, "battle:state", state);
+      this.emitBattleState(battleId, state);
     }
   }
 

@@ -2,15 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/auth_context";
 import { createBattleSocket } from "../api/socket";
+import { apiPvpQueue, apiPvpCancel } from "../api/battles_api";
+
+type UiStatus = "IDLE" | "QUEUED" | "MATCHED";
 
 export function PvpSetupPage() {
   const nav = useNavigate();
   const { token } = useAuth();
 
-  const sockRef = useRef<any>(null);
+  const sockRef = useRef<ReturnType<typeof createBattleSocket> | null>(null);
 
   const [connected, setConnected] = useState(false);
-  const [status, setStatus] = useState<"idle" | "queue">("idle");
+  const [status, setStatus] = useState<UiStatus>("IDLE");
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,54 +22,86 @@ export function PvpSetupPage() {
     const sock = createBattleSocket(token);
     sockRef.current = sock;
 
-    sock.on("connect", () => setConnected(true));
-    sock.on("disconnect", () => {
-      setConnected(false);
-      setStatus("idle");
-    });
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
 
-    sock.on("pvp:queued", () => {
-      setErr(null);
-      setStatus("queue");
-    });
+    sock.on("connect", onConnect);
+    sock.on("disconnect", onDisconnect);
 
-    sock.on("pvp:canceled", () => {
-      setErr(null);
-      setStatus("idle");
-    });
-
-    sock.on("pvp:matched", (p: any) => {
-      const battleId = Number(p?.battleId);
-      if (!battleId) return;
-      setErr(null);
-      setStatus("idle");
-      nav(`/app/lobby/${battleId}`);
+    // solo notificacion: cuando haya match, navegar al lobby
+    sock.on("pvp:matched", (p) => {
+      setStatus("MATCHED");
+      nav(`/app/lobby/${p.battleId}`);
     });
 
     sock.on("battle:error", (p: any) => {
       setErr(p?.message || "Socket error");
-      setStatus("idle");
     });
 
     return () => {
       try {
+        sock.off("connect", onConnect);
+        sock.off("disconnect", onDisconnect);
         sock.disconnect();
       } catch {}
       sockRef.current = null;
     };
-  }, [token]);
+  }, [token, nav]);
 
-  function ponerseEnLinea() {
-    if (!connected) return;
+  // seguridad: si sales de la pagina estando en cola, cancelamos
+  useEffect(() => {
+    return () => {
+      if (!token) return;
+      if (status !== "QUEUED") return;
+
+      apiPvpCancel(token).catch(() => {});
+    };
+  }, [token, status]);
+
+  async function ponerseEnLinea() {
+    if (!token) {
+      setErr("No hay token. Inicia sesion.");
+      return;
+    }
+    if (!connected) {
+      setErr("Socket off. Espera a conectar.");
+      return;
+    }
+
     setErr(null);
-    sockRef.current?.emit("pvp:queue");
+
+    try {
+      const res: any = await apiPvpQueue(token);
+
+      // si el backend responde matched, navega directo
+      if (res?.status === "MATCHED" && res?.battleId) {
+        setStatus("MATCHED");
+        nav(`/app/lobby/${res.battleId}`);
+        return;
+      }
+
+      // si no, quedas en cola y esperas pvp:matched por ws
+      setStatus("QUEUED");
+    } catch (e: any) {
+      setErr(e?.message || "No se pudo poner en linea");
+    }
   }
 
-  function cancelar() {
-    if (!connected) return;
+  async function cancelar() {
+    if (!token) return;
+
     setErr(null);
-    sockRef.current?.emit("pvp:cancel");
+
+    try {
+      await apiPvpCancel(token);
+      setStatus("IDLE");
+    } catch (e: any) {
+      setErr(e?.message || "No se pudo cancelar");
+    }
   }
+
+  const canQueue = !!token && connected && status !== "QUEUED" && status !== "MATCHED";
+  const canCancel = !!token && status === "QUEUED";
 
   return (
     <div className="min-h-full">
@@ -80,11 +115,12 @@ export function PvpSetupPage() {
               </span>
             </div>
             <div className="text-sm text-zinc-400">
-              Ponte en linea. Cuando otro jugador se ponga en linea, se crea la sala y entrais ambos. El personaje se elige
-              dentro del lobby.
+              Ponte en linea. Cuando otro jugador se ponga en linea, se crea la sala y entrais ambos. El personaje se elige dentro del lobby.
             </div>
           </div>
+
           <button
+            type="button"
             className="rounded-xl bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-sm"
             onClick={() => nav("/app")}
           >
@@ -100,35 +136,33 @@ export function PvpSetupPage() {
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
           <div className="text-sm text-zinc-400">Estado</div>
-          <div className="mt-2 text-lg">
-            {status === "idle" ? (
-              <span className="text-zinc-200">Sin buscar</span>
-            ) : (
-              <span className="text-fuchsia-200">Buscando rival...</span>
-            )}
+          <div className="mt-1 text-2xl font-semibold text-zinc-200">
+            {status === "IDLE" ? "Sin buscar" : status === "QUEUED" ? "Buscando rival..." : "Emparejado"}
           </div>
-          <div className="mt-2 text-xs text-zinc-500">
-            Si se cae el socket o cierras la pestaña, sales de la cola automaticamente.
+          <div className="mt-2 text-sm text-zinc-500">
+            Si se cae el socket o cierras la pestana, sales de la cola automaticamente.
           </div>
         </div>
 
-        {status === "idle" ? (
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
-            className="mt-6 w-full rounded-2xl bg-fuchsia-600 hover:bg-fuchsia-500 text-white px-4 py-3 font-semibold disabled:opacity-50"
+            type="button"
+            className="w-full rounded-2xl bg-fuchsia-500 hover:bg-fuchsia-400 text-white px-4 py-4 font-semibold disabled:opacity-50"
             onClick={ponerseEnLinea}
-            disabled={!connected}
+            disabled={!canQueue}
           >
             Ponerse en linea
           </button>
-        ) : (
+
           <button
-            className="mt-6 w-full rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-3 font-semibold disabled:opacity-50"
+            type="button"
+            className="w-full rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-zinc-100 px-4 py-4 font-semibold disabled:opacity-50"
             onClick={cancelar}
-            disabled={!connected}
+            disabled={!canCancel}
           >
             Cancelar busqueda
           </button>
-        )}
+        </div>
       </div>
     </div>
   );

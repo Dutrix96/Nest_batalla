@@ -46,7 +46,7 @@ export function LobbyPage() {
     (async () => {
       if (!token) return;
 
-      const list = await apiCharacters(token);
+      const list = await apiCharacters();
       setChars(list);
 
       const lvl = user?.level ?? 1;

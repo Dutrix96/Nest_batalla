@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiLogin, apiRegister } from "../api/auth_api";
 import { useAuth } from "../auth/auth_context";
 
 export function AuthPage() {
   const nav = useNavigate();
-  const { setSession, token } = useAuth();
+  const { setSession, token, user } = useAuth();
 
   const [tab, setTab] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -13,9 +13,13 @@ export function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  if (token) {
-    nav("/app", { replace: true });
-  }
+  useEffect(() => {
+    if (!token) return;
+
+    const role = (user?.role ?? "").toUpperCase();
+    if (role === "ADMIN") nav("/app/admin", { replace: true });
+    else nav("/app", { replace: true });
+  }, [token, user?.role]);
 
   async function submit() {
     setError(null);
@@ -25,7 +29,10 @@ export function AuthPage() {
         tab === "login" ? await apiLogin(email, password) : await apiRegister(email, password);
 
       setSession(res.token, res.user);
-      nav("/app", { replace: true });
+
+      const role = (res.user.role ?? "").toUpperCase();
+      if (role === "ADMIN") nav("/app/admin", { replace: true });
+      else nav("/app", { replace: true });
     } catch (e: any) {
       setError(e?.message || "Error");
     } finally {

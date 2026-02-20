@@ -1,7 +1,8 @@
 import { env } from "./env";
+import { getToken } from "./storage";
 
 type HttpOptions = {
-  method?: "GET" | "POST" | "PUT" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   token?: string;
   body?: any;
 };
@@ -13,8 +14,9 @@ export async function http<T>(path: string, opts?: HttpOptions): Promise<T> {
     "Content-Type": "application/json",
   };
 
-  if (opts?.token) {
-    headers["Authorization"] = `Bearer ${opts.token}`;
+  const token = opts?.token ?? getToken() ?? undefined;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const res = await fetch(`${env.apiBaseUrl}${path}`, {

@@ -55,3 +55,12 @@ export type BattleAttackEvent = {
   targetHp: number;
   special: boolean;
 };
+
+// ===== admin =====
+export type CreateUserDto = {
+  email: string;
+  passwordHash: string;
+  role?: Role;
+};
+
+export type UpdateUserDto = Partial<CreateUserDto>;

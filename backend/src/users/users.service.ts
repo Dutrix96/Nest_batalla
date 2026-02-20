@@ -5,7 +5,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) { }
+  constructor(private prisma: PrismaService) {}
 
   create(createUserDto: CreateUserDto) {
     return this.prisma.user.create({
@@ -55,6 +55,36 @@ export class UsersService {
         { wins: 'desc' },
         { email: 'asc' },
       ],
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        level: true,
+        xp: true,
+        wins: true,
+        losses: true,
+      },
+    });
+  }
+
+  async addXp(userId: number, xpGanada: number) {
+    if (!Number.isFinite(xpGanada) || xpGanada <= 0) {
+      return this.findOne(userId);
+    }
+
+    const user = await this.findOne(userId);
+
+    let nivel = user.level;
+    let xp = user.xp + xpGanada;
+
+    while (xp >= nivel * 100) {
+      xp -= nivel * 100;
+      nivel += 1;
+    }
+
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: { level: nivel, xp },
       select: {
         id: true,
         email: true,

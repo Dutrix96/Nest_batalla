@@ -8,6 +8,7 @@ import type { User } from "../api/types";
 export function DashboardPage() {
   const nav = useNavigate();
   const { token, user, clear, setSession } = useAuth();
+
   const [ranking, setRanking] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [warn, setWarn] = useState<string | null>(null);
@@ -18,22 +19,33 @@ export function DashboardPage() {
   }, [user]);
 
   useEffect(() => {
+    if (!token) return;
+
+    const currentRole = (user?.role ?? "").toUpperCase();
+    if (currentRole === "ADMIN") {
+      nav("/app/admin", { replace: true });
+      return;
+    }
+
     (async () => {
-      if (!token) return;
       setLoading(true);
       setWarn(null);
 
       try {
-        // si NO anades /auth/me, esto fallara y no pasa nada
         const me = await apiMe(token);
         setSession(token, me);
+
+        const meRole = (me.role ?? "").toUpperCase();
+        if (meRole === "ADMIN") {
+          nav("/app/admin", { replace: true });
+          return;
+        }
       } catch {
-        // sin /auth/me te quedas con el user del login
+        // si falla /auth/me, te quedas con lo que habia
       }
 
       try {
-        // si NO anades /users/ranking, esto fallara y te aviso
-        const list = await apiRanking(token);
+        const list = await apiRanking();
         setRanking(list);
       } catch {
         setWarn("No hay endpoint de ranking para USER. Anade GET /users/ranking y quedara perfecto.");
@@ -41,7 +53,7 @@ export function DashboardPage() {
         setLoading(false);
       }
     })();
-  }, [token]);
+  }, [token, user?.role]);
 
   if (!user) return null;
 
@@ -53,6 +65,7 @@ export function DashboardPage() {
             <div className="text-2xl font-semibold">Dashboard</div>
             <div className="text-sm text-zinc-400">Bienvenido, {user.email}</div>
           </div>
+
           <button
             className="rounded-xl bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-sm"
             onClick={() => {
@@ -67,6 +80,7 @@ export function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
             <div className="text-sm text-zinc-400">Tu progreso</div>
+
             <div className="mt-2 flex items-end justify-between">
               <div>
                 <div className="text-3xl font-semibold">Nivel {user.level}</div>
@@ -76,10 +90,14 @@ export function DashboardPage() {
                 {user.wins}W / {user.losses}L
               </div>
             </div>
+
             <div className="mt-4 h-3 w-full rounded-full bg-zinc-800 overflow-hidden">
               <div className="h-full bg-indigo-500" style={{ width: `${xpPct}%` }} />
             </div>
-            <div className="mt-2 text-xs text-zinc-500">Ganas +10 XP por victoria (segun tu backend).</div>
+
+            <div className="mt-2 text-xs text-zinc-500">
+              Ganas +20 XP por victoria/ +10 XP por derrota.
+            </div>
           </div>
 
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 lg:col-span-2">
@@ -128,27 +146,31 @@ export function DashboardPage() {
 
           <div className="overflow-auto">
             <table className="w-full text-sm">
-              <thead className="text-zinc-400">
+              <thead className="bg-zinc-950 text-zinc-300">                
                 <tr className="border-b border-zinc-800">
-                  <th className="py-2 text-left">#</th>
-                  <th className="py-2 text-left">Email</th>
-                  <th className="py-2 text-left">Nivel</th>
-                  <th className="py-2 text-left">XP</th>
-                  <th className="py-2 text-left">W/L</th>
-                </tr>
+                <th className="py-2 px-3 text-left font-semibold text-zinc-300">id</th>
+                <th className="py-2 px-3 text-left font-semibold text-zinc-300">email</th>
+                <th className="py-2 px-3 text-left font-semibold text-zinc-300">role</th>
+                <th className="py-2 px-3 text-left font-semibold text-zinc-300">lvl</th>
+                <th className="py-2 px-3 text-left font-semibold text-zinc-300">xp</th>
+                <th className="py-2 px-3 text-left font-semibold text-zinc-300">wins</th>
+                <th className="py-2 px-3 text-left font-semibold text-zinc-300">losses</th>
+                <th className="py-2 px-3 text-left font-semibold text-zinc-300">acciones</th>
+              </tr>
               </thead>
               <tbody>
                 {ranking.map((u, i) => (
                   <tr key={u.id} className="border-b border-zinc-900 hover:bg-zinc-900/40">
-                    <td className="py-2 pr-2">{i + 1}</td>
-                    <td className="py-2">{u.email}</td>
-                    <td className="py-2">{u.level}</td>
-                    <td className="py-2">{u.xp}</td>
-                    <td className="py-2">
+                    <td className="py-2 pr-2 px-3">{i + 1}</td>
+                    <td className="py-2 px-3">{u.email}</td>
+                    <td className="py-2 px-3">{u.level}</td>
+                    <td className="py-2 px-3">{u.xp}</td>
+                    <td className="py-2 px-3">
                       {u.wins}/{u.losses}
                     </td>
                   </tr>
                 ))}
+
                 {!ranking.length ? (
                   <tr>
                     <td className="py-3 text-zinc-500" colSpan={5}>

@@ -13,3 +13,8 @@ html, body, #root {
 body {
   @apply bg-zinc-950 text-zinc-100;
 }
+
+thead {
+  background-color: rgb(9 9 11); /* zinc-950 */
+  color: rgb(0 0 0); /* zinc-300 */
+}

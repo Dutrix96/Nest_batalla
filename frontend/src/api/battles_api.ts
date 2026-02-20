@@ -1,42 +1,62 @@
 import { http } from "../lib/http";
 
-export function apiBattle(token: string, battleId: number) {
+type CreateBattlePayload = {
+  mode: "PVE" | "PVP";
+  initiatorCharacterId: number;
+  opponentCharacterId: number;
+  opponentUserId?: number | null;
+};
+
+export function apiCreateBattle(token: string | undefined, payload: CreateBattlePayload) {
+  return http<any>("/battles", {
+    method: "POST",
+    token,
+    body: payload,
+  });
+}
+
+export function apiBattle(token: string | undefined, battleId: number) {
   return http<any>(`/battles/${battleId}`, {
     method: "GET",
     token,
   });
 }
 
-export function apiAttack(token: string, battleId: number, special: boolean) {
+export function apiAttack(token: string | undefined, battleId: number, special: boolean) {
   return http<any>("/battles/attack", {
     method: "POST",
     token,
-    body: {
-      battleId,
-      special: !!special,
-    },
+    body: { battleId, special: !!special },
   });
 }
 
-export function apiSelectCharacter(token: string, battleId: number, characterId: number) {
+export function apiSelectCharacter(
+  token: string | undefined,
+  battleId: number,
+  characterId: number
+) {
   return http<any>("/battles/select-character", {
     method: "POST",
     token,
-    body: {
-      battleId,
-      characterId,
-    },
+    body: { battleId, characterId },
   });
 }
 
-export function apiPvpQueue(token: string) {
+export function apiMyBattles(token: string | undefined) {
+  return http<any>("/battles", {
+    method: "GET",
+    token,
+  });
+}
+
+export function apiPvpQueue(token: string | undefined) {
   return http<any>("/battles/pvp-queue", {
     method: "POST",
     token,
   });
 }
 
-export function apiPvpCancel(token: string) {
+export function apiPvpCancel(token: string | undefined) {
   return http<any>("/battles/pvp-queue", {
     method: "DELETE",
     token,
