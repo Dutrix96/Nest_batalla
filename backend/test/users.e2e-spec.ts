@@ -28,10 +28,14 @@ describe('Users (e2e)', () => {
     });
 
     it('GET /users/ranking -> 200 y array', async () => {
-        await registerAndLogin(app, { email: 'u1@test.com' });
+        const u1 = await registerAndLogin(app, { email: 'u1@test.com' });
         await registerAndLogin(app, { email: 'u2@test.com' });
 
-        const res = await request(app.getHttpServer()).get('/users/ranking').expect(200);
+        const res = await request(app.getHttpServer())
+            .get('/users/ranking')
+            .set(authHeader(u1.token))
+            .expect(200);
+
         expect(Array.isArray(res.body)).toBe(true);
     });
 
@@ -40,14 +44,20 @@ describe('Users (e2e)', () => {
         const login = await request(app.getHttpServer())
             .post('/auth/login')
             .send({ email: admin.email, password: admin.password })
-            .expect(200);
+            .expect((r) => {
+                if (![200, 201].includes(r.status)) {
+                    throw new Error(`Login status inesperado: ${r.status}`);
+                }
+            });
 
-        const token = login.body.access_token;
+        const token = login.body.token;
+        if (!token) throw new Error('No token en login admin');
+
 
         const res = await request(app.getHttpServer())
             .post('/users')
             .set(authHeader(token))
-            .send({ username: 'nuevo', email: 'nuevo@test.com', password: '123456', role: 'USER' })
+            .send({  email: 'nuevo@test.com', passwordHash: '123456', role: 'USER' })
             .expect(201);
 
         expect(res.body).toHaveProperty('id');

@@ -3,7 +3,6 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { BattlesService } from "./battles.service";
 import { BattlesGateway } from "./battles.gateway";
 import { PvpQueueService } from "./pvp-queue.service";
-
 import { CreateBattleDto } from "./dto/create-battle.dto";
 import { CreatePvpLobbyDto } from "./dto/create-pvp-lobby.dto";
 import { SelectCharacterDto } from "./dto/select-character.dto";
@@ -40,14 +39,12 @@ export class BattlesController {
     return this.battlesService.createPvpLobby(req.user.id, dto.opponentUserId);
   }
 
-  // ====== MATCHMAKING ENDPOINTS ======
   @UseGuards(JwtAuthGuard)
   @Post("pvp-queue")
   async queue(@Req() req: any) {
     const res = await this.pvpQueue.queue(req.user.id);
 
     if (res.status === "MATCHED") {
-      // ws solo emite el resultado
       this.gateway.emitToUser(res.users[0], "pvp:matched", { battleId: res.battleId });
       this.gateway.emitToUser(res.users[1], "pvp:matched", { battleId: res.battleId });
     }

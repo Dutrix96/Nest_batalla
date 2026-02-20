@@ -2,23 +2,16 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Yarn 4 via Corepack
 RUN corepack enable
 
-# 1) Copiamos SOLO manifests primero (para cache)
 COPY package.json yarn.lock .yarnrc.yml ./
 
-# Si tienes carpeta .yarn en backend (Berry), copiala
-# (si no existe, no pasa nada; pero si existe, la necesitamos)
 COPY .yarn ./.yarn
 
-# 2) Instalamos dependencias (crea el estado interno de yarn)
 RUN yarn install --immutable
 
-# 3) Ahora copiamos el resto del codigo
 COPY . .
 
-# 4) Prisma + build
 RUN yarn prisma generate
 RUN yarn build
 
