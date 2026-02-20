@@ -150,12 +150,9 @@ export function DashboardPage() {
                 <tr className="border-b border-zinc-800">
                 <th className="py-2 px-3 text-left font-semibold text-zinc-300">id</th>
                 <th className="py-2 px-3 text-left font-semibold text-zinc-300">email</th>
-                <th className="py-2 px-3 text-left font-semibold text-zinc-300">role</th>
                 <th className="py-2 px-3 text-left font-semibold text-zinc-300">lvl</th>
                 <th className="py-2 px-3 text-left font-semibold text-zinc-300">xp</th>
-                <th className="py-2 px-3 text-left font-semibold text-zinc-300">wins</th>
-                <th className="py-2 px-3 text-left font-semibold text-zinc-300">losses</th>
-                <th className="py-2 px-3 text-left font-semibold text-zinc-300">acciones</th>
+                <th className="py-2 px-3 text-left font-semibold text-zinc-300">wins/losses</th>
               </tr>
               </thead>
               <tbody>
